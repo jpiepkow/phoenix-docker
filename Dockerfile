@@ -1,8 +1,6 @@
+
 # ---- Build Stage ----
 FROM elixir:1.9.1 AS app_builder
-ARG dir_name
-ENV env_dir_name=$dir_name
-RUN : "${dir_name?Need to set dir_name, this should be the directory name of your phoenix project.}"
 COPY . .
 RUN export MIX_ENV=prod && \
 	mix local.hex --force && \
@@ -12,15 +10,16 @@ RUN export MIX_ENV=prod && \
     mix deps.get && \
     mix deps.compile && \
     mix phx.digest && \
-    mix release
+    mix release && \
+    cat mix.exs | grep app: | sed -e 's/ app: ://' | tr ',' ' ' | sed 's/ //g' > app_name.txt
+RUN cat app_name.txt
 # ---- Release Stage ----
 FROM debian:stretch AS app
-ARG dir_name
-ENV env_dir_name=$dir_name
 EXPOSE 4000
 ENV LANG=C.UTF-8
 RUN apt-get update && apt-get install -y openssl
 RUN useradd --create-home app
 COPY --from=app_builder ./_build .
+COPY --from=app_builder ./app_name.txt ./app_name.txt
 RUN chown -R app: ./prod
-CMD ["sh","-c","./prod/rel/${env_dir_name}/bin/${env_dir_name} start"]
+CMD ["sh","-c","./prod/rel/$(cat ./app_name.txt)/bin/$(cat ./app_name.txt) start"]
