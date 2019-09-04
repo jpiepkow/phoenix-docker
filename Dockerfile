@@ -12,7 +12,6 @@ RUN export MIX_ENV=prod && \
     mix phx.digest && \
     mix release && \
     cat mix.exs | grep app: | sed -e 's/ app: ://' | tr ',' ' ' | sed 's/ //g' > app_name.txt
-RUN cat app_name.txt
 # ---- Release Stage ----
 FROM debian:stretch AS app
 EXPOSE 4000
