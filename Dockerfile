@@ -1,24 +1,34 @@
+# ---- Build Base Stage ----
+FROM elixir:1.9.1-alpine AS app_builder
+RUN apk add --no-cache=true \
+	gcc \
+	g++ \
+	git \
+	make \
+	musl-dev
+RUN mix do local.hex --force, local.rebar --force	
 
-# ---- Build Stage ----
-FROM elixir:1.9.1 AS app_builder
-COPY . .
-RUN export MIX_ENV=prod && \
-	mix local.hex --force && \
-	mix local.rebar --force && \
-	mix release.init && \
-    rm -Rf _build && \
-    mix deps.get && \
-    mix deps.compile && \
-    mix phx.digest && \
-    mix release && \
+# ---- Build Deps Stage ----
+FROM app_builder as deps
+COPY mix.exs mix.lock ./
+ARG MIX_ENV=prod
+ENV MIX_ENV=$MIX_ENV
+RUN mix do deps.get --only=$MIX_ENV, deps.compile
+
+# ---- Build Release Stage ----
+FROM deps as releaser
+RUN echo $MIX_ENV
+COPY config ./config
+COPY lib ./lib
+COPY priv ./priv
+RUN mix release && \
     cat mix.exs | grep app: | sed -e 's/ app: ://' | tr ',' ' ' | sed 's/ //g' > app_name.txt
-# ---- Release Stage ----
-FROM debian:stretch AS app
+
+# ---- Final Image Stage ----
+FROM alpine:3.9 as app
+RUN apk add --no-cache bash libstdc++ openssl
+ENV CMD=start
 EXPOSE 4000
-ENV LANG=C.UTF-8
-RUN apt-get update && apt-get install -y openssl
-RUN useradd --create-home app
-COPY --from=app_builder ./_build .
-COPY --from=app_builder ./app_name.txt ./app_name.txt
-RUN chown -R app: ./prod
-CMD ["sh","-c","./prod/rel/$(cat ./app_name.txt)/bin/$(cat ./app_name.txt) start"]
+COPY --from=releaser ./_build .
+COPY --from=releaser ./app_name.txt ./app_name.txt
+CMD ["sh","-c","./prod/rel/$(cat ./app_name.txt)/bin/$(cat ./app_name.txt) $CMD"]
