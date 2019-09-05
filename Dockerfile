@@ -28,7 +28,6 @@ RUN mix release && \
 FROM alpine:3.9 as app
 RUN apk add --no-cache bash libstdc++ openssl
 ENV CMD=start
-EXPOSE 4000
 COPY --from=releaser ./_build .
 COPY --from=releaser ./app_name.txt ./app_name.txt
 CMD ["sh","-c","./prod/rel/$(cat ./app_name.txt)/bin/$(cat ./app_name.txt) $CMD"]
